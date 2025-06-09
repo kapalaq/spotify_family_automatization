@@ -1,0 +1,7 @@
+# settings
+**/.env
+**/*.yaml
+
+# cache
+__pycache__
+.pytest_cache
