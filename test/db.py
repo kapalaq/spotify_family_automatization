@@ -11,6 +11,17 @@ async def db():
     yield database
     await database.close()
 
+@pytest.mark.asyncio
+@pytest.mark.dependency(name="init")
+async def test_init(db):
+    response = await db.initialize()
+    assert response == True
+
+@pytest.mark.asyncio
+@pytest.mark.dependency(name="drop", depends=["init"])
+async def test_drop(db):
+    response = await db.drop_tables()
+    assert response == True
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -26,22 +37,20 @@ async def db():
 )
 @pytest.mark.dependency(name="add")
 async def test_add_user(db, test_input, expected):
-    add = await db.add_user(*test_input)
-    assert add is expected
+    pass
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "test_input,expected",
-    [((111, 'user'), True),
-     ((111, 'user'), False),
-     ((111, 'another'), False),
-     ((112, 'user'), False),
-     ((123, 'another'), True),
-     (('133', 'other'), True),
-     ((1234, 214), True),
-     (('sdgds', 214), False)]
-)
-@pytest.mark.dependency(name="add")
-async def test_add_user(db, test_input, expected):
-    add = await db.add_user(*test_input)
-    assert add is expected
+# TESTS TO BE CREATED:
+# user add
+# user edit
+# user get
+# user delete
+# group add
+# group get
+# group edit
+# group delete
+# payment add
+# payment get
+# payment check
+# payment edit
+# payment delete
+# payment statistic

@@ -1,15 +1,14 @@
-import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.enums import ChatType
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from db import Database
-from functions import (load_config,
-                       save_config)
-from config import TelegramConfig
+from SpotifyBot.app.db import Database
+from SpotifyBot.app.config import TelegramConfig
+from SpotifyBot.app.functions import (load_config,
+                                      save_config,
+                                      logger)
 
-logging.basicConfig(level=logging.INFO)
 
 cfg = TelegramConfig()
 bot = Bot(token=cfg.token.get_secret_value())

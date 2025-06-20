@@ -26,7 +26,6 @@ class TelegramConfig(ConfigBase):
 
     token: SecretStr
     admin_id: SecretStr
-    log_file: str
 
 
 class DatabaseConfig(ConfigBase):
@@ -37,7 +36,6 @@ class DatabaseConfig(ConfigBase):
     host: str
     port: int
     database: str
-    log_file: str
 
 
 class Config(BaseSettings):
