@@ -12,6 +12,17 @@ db = Database()
 
 
 class Admin:
+    """Admin commands handling tool.
+
+    This class allows user to handle all
+    admin-specific functions with convenient
+    functionality.
+
+    Attributes:
+        admin_id: a list of admin IDs to validate users
+        logger: a ErrorLogger instance for error handling
+    """
+
     admin_id: List[str] = TelegramConfig().admin_id
     logger: ErrorLogger = ErrorLogger()
 
@@ -30,60 +41,33 @@ class Admin:
         return str(user_id) in map(lambda x: x.get_secret_value(), self.admin_id)
 
     @staticmethod
-    async def update_settings(message: types.Message) -> None:
+    async def update_settings(target: str, value: int) -> str:
         """Update settings variables using chat commands.
 
         This function allows admins to update settings variables
         from the chat directly using /update command.
 
         Args:
-            message: a message from admin that starts with /update
+            target: a target settings variable.
+            value: a new value for settings variable.
 
         Returns:
-            None
+            Done! if update was successful. Apologize otherwise.
         """
-        parts = message.text.split(maxsplit=3)
-        config = yC.load_config()
-        if not 2 < len(parts) < 5:
-            await message.answer(
-                '\n'.join(f"{k}: {v}" for k, v in config.items()) + '\n\n'
-                + "Usage: /update <KEY> <VALUE> <add/delete>\n"
-                + "NOTE: <add/delete> does not work for price!"
-            )
-            return
 
-        key, value = parts[1], parts[2]
-        if key == "price":
+        config = yC.load_config()
+
+        if target == "price":
             try:
-                config[key] = int(value)
+                config[target] = int(value)
                 yC.save_config(config)
-                await message.answer(f"Updated {key} on {value} successfully!")
+                return "Done!"
             except Exception as e:
-                await message.answer(f"Error updating {key}: {e}")
-        elif key == "bank_accounts":
-            try:
-                action = parts[3]
-            except IndexError:
-                await message.answer("Please, complete your query with 'add' or 'delete'.")
-                return
-            if action == "add":
-                try:
-                    config[key].append(value)
-                    yC.save_config(config)
-                    await message.answer(f"Added {key} on {value} successfully!")
-                except Exception as e:
-                    await message.answer(f"Error adding {key}: {e}")
-            elif action == "delete":
-                try:
-                    config[key].remove(value)
-                    yC.save_config(config)
-                    await message.answer(f"Deleted {value} from {key} successfully!")
-                except Exception as e:
-                    await message.answer(f"Error deleting {key}: {e}")
-            else:
-                await message.reply("There is no such action! Please, complete your query with 'add' or 'delete'.")
+                Admin.logger.logger.error("ON CONFIG UPDATING: %s", e)
+                return "Sorry! There is a problem with your settings variable."
+
         else:
-            await message.reply("There is no such key! Please, choose from provided list.")
+            return "Sorry! There is no such settings variable."
 
     @staticmethod
     async def link_user_to_group(user_id: int, group_id: int, payment_at: datetime=None) -> str:
@@ -100,23 +84,17 @@ class Admin:
 
         Returns:
             Done!
-
-        Raises:
-            Username not found or Group name not found.
         """
 
         await db.add_payments(user_id, group_id, payment_at)
         return "Done!"
 
-    async def get_unpaid_group(self, message: types.Message) -> None:
+    async def get_unpaid_group(self) -> str:
         """Get all unpaid groups.
 
         It will include all groups that contains
         at least one unpaid user, meaning his
         payment date is behind current date.
-
-        Args:
-            message: a message from admin that starts with /unpaid
 
         Returns:
             All unpaid users divided into groups
@@ -126,7 +104,8 @@ class Admin:
             unpaid_users = await db.get_unpaid_group()
         except AttributeError as e:
             self.logger.logger.error("ON GET UNPAID GROUP: %s", e)
-            return
+            return "Sorry! There is a problem with database."
+
         groups = (
             pd.DataFrame(
                 unpaid_users,
@@ -147,7 +126,7 @@ class Admin:
             if num_of_groups != 0:
                 ans += '\n=======================\n'
 
-        await message.answer(ans)
+        return ans
 
     async def get_user(self, username: str) -> Tuple[int, str]:
         """Get user ID by username.
@@ -183,4 +162,4 @@ class Admin:
 
 
 if __name__ == '__main__':
-    print(Admin().is_admin(708822452))
+    pass

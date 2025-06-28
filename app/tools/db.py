@@ -90,7 +90,7 @@ class Database:
                         '''
                         CREATE TABLE IF NOT EXISTS payments (
                         group_id INT NOT NULL,
-                        user_id INT NOT NULL,
+                        user_id INT UNIQUE NOT NULL,
                         payment_at TIMESTAMP NOT NULL,
                         paid_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (group_id, user_id),

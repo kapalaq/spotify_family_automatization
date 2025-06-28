@@ -4,7 +4,6 @@ from aiogram.fsm.state import State, StatesGroup
 class SettingsForm(StatesGroup):
     target = State()
     value = State()
-    action = State()
     confirm = State()
 
 

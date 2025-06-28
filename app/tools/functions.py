@@ -2,9 +2,23 @@ import os
 import yaml
 import logging
 
-# Logging Handler
+
 class ErrorLogger:
+    """Class for logging errors.
+
+    A facade class for logger from logging.
+    It writes all logged errors into specified file.
+
+    Attributes:
+        logger: a logger instance that allows logging effectively
+    """
+
     def __init__(self):
+        """Initalizes instance of ErrorLogger
+
+        Log (error.log) file can be found in root/app/settings.
+
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
 
@@ -21,25 +35,38 @@ class ErrorLogger:
         self.logger.addHandler(error_handler)
 
 
-# YAML Config Handlers
 class YAMLConfig:
-    CONFIG_PATH: str = os.path.join("../settings", "config.yaml")
+    """YAML Config Handler
+
+    This class allows user to work with YAML config files.
+    In details, one can access values from YAML config file
+    and update/delete values in it. Then save their changes.
+
+    Attributes:
+        CONFIG_PATH: A string containing absolute path to YAML config file
+    """
+
+    CONFIG_PATH: str = os.path.join(os.getcwd(), "settings", "config.yaml")
 
     @staticmethod
     def load_config() -> dict:
-        """
-        Load config file
-        :return: dict of config
+        """Load config file.
+
+        Return:
+            dict of config
         """
         with open(YAMLConfig.CONFIG_PATH, "r") as f:
             return yaml.safe_load(f)
 
     @staticmethod
     def save_config(data: dict) -> None:
-        """
-        Save config file
-        :param data: data in dict format
-        :return: None
+        """Save config file.
+
+        Args:
+            data (dict): config
+
+        Returns:
+             None, saves new config data
         """
         with open(YAMLConfig.CONFIG_PATH, "w") as f:
             yaml.dump(data, f, default_flow_style=False)
