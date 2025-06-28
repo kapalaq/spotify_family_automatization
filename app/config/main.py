@@ -25,7 +25,7 @@ class TelegramConfig(ConfigBase):
     model_config = SettingsConfigDict(env_prefix='TG_')
 
     token: SecretStr
-    admin_id: SecretStr
+    admin_id: List[SecretStr]
 
 
 class DatabaseConfig(ConfigBase):

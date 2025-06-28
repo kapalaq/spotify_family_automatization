@@ -2,14 +2,17 @@ import aiopg
 import asyncio
 import sys
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from typing import List, Tuple
 
 from SpotifyBot.app.config import DatabaseConfig
-from SpotifyBot.app.functions import logger
+from SpotifyBot.app.tools.functions import ErrorLogger
 
 # Fix for Windows + aiopg
 if sys.platform.startswith('win'):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+logger = ErrorLogger()
 
 
 class Database:
@@ -19,7 +22,9 @@ class Database:
         self.dsn = (f"dbname={cfg.database} user={cfg.username.get_secret_value()} "
                     f"password={cfg.password.get_secret_value()} "
                     f"host={cfg.host} port={cfg.port}")
-        self.pool = None
+
+    def __del__(self):
+        self.close()
 
     async def connect(self) -> bool:
         """
@@ -29,7 +34,7 @@ class Database:
         try:
             self.pool = await aiopg.create_pool(self.dsn)
         except Exception as e:
-            logger.error("ON CONNECTION: %s", e)
+            logger.logger.error("ON CONNECTION: %s", e)
 
         return self.pool is None
 
@@ -43,7 +48,7 @@ class Database:
                 self.pool.close()
                 await self.pool.wait_closed()
             except Exception as e:
-                logger.error("ON CONNECTION CLOSE: %s", e)
+                logger.logger.error("ON CONNECTION CLOSE: %s", e)
             return True
 
     async def initialize(self) -> bool:
@@ -95,7 +100,7 @@ class Database:
                     )
                     return True
                 except Exception as e:
-                    logger.error("ON TABLE INITALIZATION: %s", e)
+                    logger.logger.error("ON TABLE INITALIZATION: %s", e)
                     return False
 
     async def add_user(self, user_id: int, username: str) -> bool:
@@ -114,11 +119,11 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "INSERT INTO users (user_id, username) VALUES (%s, %s);",
-                        (user_id, username)
+                        "INSERT INTO users (user_id, username) VALUES (%s, LOWER(%s));",
+                        (user_id, username.replace('@', ''))
                     )
                 except Exception as e:
-                    logger.error("ON USER ADD: %s", e)
+                    logger.logger.error("ON USER ADD: %s", e)
                 return cursor.rowcount > 0
 
     async def get_user_by_id(self, user_id: int) -> Tuple[int, str]:
@@ -141,7 +146,7 @@ class Database:
                     )
                     return await cursor.fetchone()
                 except Exception as e:
-                    logger.error("ON USER GET BY ID: %s", e)
+                    logger.logger.error("ON USER GET BY ID: %s", e)
 
     async def get_user_by_name(self, username: str) -> Tuple[int, str]:
         """
@@ -158,12 +163,12 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "SELECT user_id, username FROM users WHERE username = %s",
-                        (username,)
+                        "SELECT user_id, username FROM users WHERE username = LOWER(%s)",
+                        (username.replace('@', ''),)
                     )
                     return await cursor.fetchone()
                 except Exception as e:
-                    logger.error("ON USER GET BY USERNAME: %s", e)
+                    logger.logger.error("ON USER GET BY USERNAME: %s", e)
 
     async def update_username(self, user_id: int, new_username: str) -> bool:
         """
@@ -181,11 +186,11 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "UPDATE users SET username = %s WHERE user_id = %s",
+                        "UPDATE users SET username = LOWER(%s) WHERE user_id = %s",
                         (new_username, user_id)
                     )
                 except Exception as e:
-                    logger.error("ON USERNAME UPDATE BY ID: %s", e)
+                    logger.logger.error("ON USERNAME UPDATE BY ID: %s", e)
                 return cursor.rowcount > 0
 
     async def add_group(self, group_id: int, group_name: str, payment_at: datetime) -> bool:
@@ -201,19 +206,51 @@ class Database:
         """
         if not self.pool:
             raise Exception("Database connection pool is empty")
+        try:
+            if payment_at < datetime.now():
+                delta = relativedelta(payment_at, datetime.now())
+                total_months = delta.years * 12 + delta.months + 1
+                payment_at += relativedelta(months=total_months)
+        except Exception as e:
+            logger.logger.error("ON GROUP ADD: %s", e)
+            return False
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "INSERT INTO groups (group_id, group_name, payment_at) VALUES (%s, LOWER(%s), %s)",
+                        """
+                        INSERT INTO groups (group_id, group_name, payment_at)
+                        VALUES (%s, LOWER(%s), %s)
+                        """,
                         (group_id, group_name, payment_at)
                     )
                 except Exception as e:
-                    logger.error("ON GROUP ADD: %s", e)
+                    logger.logger.error("ON GROUP ADD: %s", e)
                 return cursor.rowcount > 0
 
-    async def get_group(self, group_id: int) -> Tuple[int, str, datetime, datetime]:
+    async def get_all_groups(self) -> List[Tuple[int, str, datetime, datetime]]:
+        """Get all groups from Database table groups
+
+        Returns:
+            List of (group_id, group_name, payment_at, created_at) tuples
+        Errors:
+            Exception: Database connection failed.
+        """
+        if not self.pool:
+            raise Exception("Database connection pool is empty")
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    await cursor.execute(
+                        "SELECT * FROM groups",
+                    )
+                    return await cursor.fetchall()
+                except Exception as e:
+                    logger.logger.error("ON GROUP GET: %s", e)
+
+    async def get_group_by_id(self, group_id: int) -> Tuple[int, str, datetime, datetime]:
         """
         Get group from database table
         :param group_id: id of the group
@@ -233,7 +270,7 @@ class Database:
                     )
                     return await cursor.fetchone()
                 except Exception as e:
-                    logger.error("ON GROUP GET: %s", e)
+                    logger.logger.error("ON GROUP GET: %s", e)
 
     async def get_group_by_name(self, group_name: str) -> Tuple[int, str, datetime, datetime]:
         """
@@ -252,13 +289,13 @@ class Database:
                     await cursor.execute(
                         """
                         SELECT group_id, group_name, payment_at, created_at
-                        FROM groups WHERE LOWER(group_name) = %s
+                        FROM groups WHERE group_name = LOWER(%s)
                         """,
                         (group_name,)
                     )
                     return await cursor.fetchone()
                 except Exception as e:
-                    logger.error("ON GROUP GET BY NAME: %s", e)
+                    logger.logger.error("ON GROUP GET BY NAME: %s", e)
 
     async def update_group_name(self, group_id: int, new_group_name: str) -> bool:
         """
@@ -272,6 +309,10 @@ class Database:
         if not self.pool:
             raise Exception("Database connection pool is empty")
 
+        if isinstance(new_group_name, str) or len(new_group_name) == 0:
+            logger.logger.error("ON GROUP NAME UPDATE BY ID: %s", new_group_name + " is empty or not a string")
+            return False
+
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 try:
@@ -280,7 +321,7 @@ class Database:
                         (new_group_name, group_id)
                     )
                 except Exception as e:
-                    logger.error("ON GROUP NAME UPDATE BY ID: %s", e)
+                    logger.logger.error("ON GROUP NAME UPDATE BY ID: %s", e)
                 return cursor.rowcount > 0
 
     async def add_payments(self, user_id: int, group_id: int, payment_at: datetime) -> bool:
@@ -295,17 +336,27 @@ class Database:
         """
         if not self.pool:
             raise Exception("Database connection pool is empty")
+        try:
+            if payment_at < datetime.now():
+                delta = relativedelta(payment_at, datetime.now())
+                total_months = delta.years * 12 + delta.months + 1
+                payment_at += relativedelta(months=total_months)
+        except Exception as e:
+            logger.logger.error("ON PAYMENT RELATION ADD: %s", e)
+            return False
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        """INSERT OR REPLACE INTO payments (user_id, group_id, payment_at)
-                        VALUES (%s, %s, %s)""",
+                        """
+                        INSERT INTO payments (user_id, group_id, payment_at)
+                        VALUES (%s, %s, %s)
+                        """,
                         (user_id, group_id, payment_at)
                     )
                 except Exception as e:
-                    logger.error("ON PAYMENTS RELATION ADD: %s", e)
+                    logger.logger.error("ON PAYMENTS RELATION ADD: %s", e)
                 return cursor.rowcount > 0
 
     async def get_user_group(self, user_id: int) -> int:
@@ -320,15 +371,15 @@ class Database:
             raise Exception("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
-            async with conn.cursor() as cur:
+            async with conn.cursor() as cursor:
                 try:
-                    cursor = await cur.execute(
+                    await cursor.execute(
                         "SELECT group_id FROM payments WHERE user_id = %s",
                         (user_id,)
                     )
                     return await cursor.fetchone()
                 except Exception as e:
-                    logger.error("ON USER'S GROUP GET: %s", e)
+                    logger.logger.error("ON USER'S GROUP GET: %s", e)
 
     async def get_group_users(self, group_id: int) -> List[int]:
         """
@@ -350,7 +401,7 @@ class Database:
                     )
                     return await cursor.fetchall()
                 except Exception as e:
-                    logger.error("ON GROUP USERS GET: %s", e)
+                    logger.logger.error("ON GROUP USERS GET: %s", e)
 
     async def check_payments(self) -> List[Tuple[int, int, int]]:
         """
@@ -375,7 +426,7 @@ class Database:
                     )
                     return await cursor.fetchall()
                 except Exception as e:
-                    logger.error("ON CHECK PAYMENT: %s", e)
+                    logger.logger.error("ON CHECK PAYMENT: %s", e)
 
     async def mark_payment(self, user_id: int, month_paid: int) -> bool:
         """
@@ -401,38 +452,51 @@ class Database:
                         (month_paid, now, user_id)
                     )
                 except Exception as e:
-                    logger.error("ON MARK PAYMENT: %s", e)
+                    logger.logger.error("ON MARK PAYMENT: %s", e)
                 return cursor.rowcount > 0
 
-    async def get_statistic_per_group(self, group_name: str) -> List[Tuple[str, datetime, datetime]]:
-        """
-        Get statistic of payments per group
-        :param group_name: name of the group
-        :return:
-            List[Tuple[int, str, datetime, datetime]]:
-                list of (username, next payment date, last payment date)
+    async def get_unpaid_group(self) -> List[Tuple[str, str, datetime, bool, int]]:
+        """Get statistic of payments per group that did not fully pay.
+
+        Returns
+            List[Tuple[str, str, datetime, bool, int]]:
+                list of (group_name, username, next payment date, is paid, how many days later)
+
+        Raises:
+            Exception: Database connection failed.
         """
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 try:
-                    group_id = await self.get_group_by_name(group_name)
                     await cursor.execute(
                         """
-                        SELECT u.username, p.payment_at,
-                        TIMESTAMPDIFF(DAY, p.payment_at, CURRENT_TIMESTAMP) as diff
-                        FROM payments p
-                        INNER JOIN users u
-                        ON p.user_id = u.user_id
-                        WHERE group_id = %s
+                        SELECT group_name, user_name, payment_at, paid, diff FROM (
+                            SELECT 
+                            g.group_name as group_name,
+                            sub.username as username,
+                            sub.payment_at as payment_at,
+                            sub.diff < 0 as paid
+                            sub.diff as diff,
+                            MAX(sub.diff) OVER (PARTITION BY sub.group_id) as max_diff_value
+                            FROM groups g INNER JOIN
+                            (
+                                SELECT p.group_id, u.username, p.payment_at,
+                                EXTRACT(DAY FROM CURRENT_DATE - p.payment_at) as diff
+                                FROM payments p
+                                INNER JOIN users u
+                                ON p.user_id = u.user_id
+                            ) as sub
+                            ON g.group_id = sub.group_id
+                        ) as sup
+                        WHERE sup.max_diff_value >= 0
                         """,
-                        (group_id,)
                     )
                     return await cursor.fetchall()
                 except Exception as e:
-                    logger.error("ON GROUP STATISTIC GET: %s", e)
+                    logger.logger.error("ON GROUP STATISTIC GET: %s", e)
 
     async def delete_user(self, username: str) -> bool:
         """
@@ -451,7 +515,7 @@ class Database:
                         (username,)
                     )
                 except Exception as e:
-                    logger.error("ON DELETE FROM USERS: %s", e)
+                    logger.logger.error("ON DELETE FROM USERS: %s", e)
                 return cursor.rowcount > 0
 
     async def delete_group(self, group_name: str) -> bool:
@@ -471,7 +535,7 @@ class Database:
                         (group_name,)
                     )
                 except Exception as e:
-                    logger.error("ON DELETE FROM GROUPS: %s", e)
+                    logger.logger.error("ON DELETE FROM GROUPS: %s", e)
                 return cursor.rowcount > 0
 
     async def drop_tables(self) -> bool:
@@ -489,8 +553,8 @@ class Database:
                 try:
                     await cursor.execute("DROP TABLE IF EXISTS users CASCADE")
                     await cursor.execute("DROP TABLE IF EXISTS groups CASCADE")
-                    await cursor.execute("DROP TABLE payment")
+                    await cursor.execute("DROP TABLE IF EXISTS payments")
                     return True
                 except Exception as e:
-                    logger.error("ON DROP TABLE ERROR: %s", e)
+                    logger.logger.error("ON DROP TABLE ERROR: %s", e)
                     return False

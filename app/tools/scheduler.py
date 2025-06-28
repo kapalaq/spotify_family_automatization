@@ -1,5 +1,4 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from db import Database
 from aiogram import Bot
 from datetime import datetime
 from config import TelegramConfig
