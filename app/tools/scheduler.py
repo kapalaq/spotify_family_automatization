@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
 from datetime import datetime
-from config import TelegramConfig
+from app.config import TelegramConfig
 
 
 ADMIN_ID = TelegramConfig().admin_id

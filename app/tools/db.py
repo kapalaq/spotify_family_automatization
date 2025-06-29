@@ -5,8 +5,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import List, Tuple
 
-from SpotifyBot.app.config import DatabaseConfig
-from SpotifyBot.app.tools.functions import ErrorLogger
+from app.config import DatabaseConfig
+from app.tools.functions import ErrorLogger
 
 # Fix for Windows + aiopg
 if sys.platform.startswith('win'):

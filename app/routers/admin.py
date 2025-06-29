@@ -6,8 +6,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from datetime import datetime
 
-from SpotifyBot.app.tools import LinkForm, SettingsForm, YAMLConfig
-from SpotifyBot.app.tools import ErrorLogger
+from app.tools import LinkForm, SettingsForm, YAMLConfig
+from app.tools import ErrorLogger
 from .users.admin import Admin
 
 

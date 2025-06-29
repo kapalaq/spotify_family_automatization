@@ -1,11 +1,10 @@
 from typing import List, Tuple
 from datetime import datetime
 import pandas as pd
-from aiogram import types
 
-from SpotifyBot.app.config import TelegramConfig
-from SpotifyBot.app.tools import ErrorLogger, Database
-from SpotifyBot.app.tools import YAMLConfig as yC
+from app.config import TelegramConfig
+from app.tools import ErrorLogger, Database
+from app.tools import YAMLConfig as yC
 
 
 db = Database()

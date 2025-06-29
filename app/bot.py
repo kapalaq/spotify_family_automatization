@@ -1,11 +1,12 @@
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.enums import ChatType
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from SpotifyBot.app.config import TelegramConfig
-from SpotifyBot.app.routers import admin_router, user_router
-from SpotifyBot.app.routers.users.admin import db
+from app.config import TelegramConfig
+from app.routers import admin_router, user_router
+from app.routers.users.admin import db
+
 
 cfg = TelegramConfig()
 
