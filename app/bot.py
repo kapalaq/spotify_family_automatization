@@ -17,15 +17,9 @@ dp.include_routers(admin_router, user_router)
 storage = MemoryStorage()
 
 
-@dp.message(Command("start"))
-async def start_cmd(message: types.Message):
-    if message.chat.type == ChatType.GROUP:
-        await message.reply("Spotify bot in the spot!")
-    else:
-        await message.reply("Spotify bot here!")
-
 async def main():
     await db.connect()
+    await db.initialize()
     await dp.start_polling(bot)
 
 

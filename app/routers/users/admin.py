@@ -1,3 +1,12 @@
+"""admin.py user
+
+This module is used to implement supporting class for admin commands.
+It provides functions for all admin manipulations with database, config files.
+
+Attributes:
+    db: a Database object
+"""
+
 from typing import List, Tuple
 from datetime import datetime
 import pandas as pd
@@ -8,7 +17,6 @@ from app.tools import YAMLConfig as yC
 
 
 db = Database()
-
 
 class Admin:
     """Admin commands handling tool.
@@ -61,15 +69,15 @@ class Admin:
                 config[target] = int(value)
                 yC.save_config(config)
                 return "Done!"
-            except Exception as e:
+            except FileNotFoundError as e:
                 Admin.logger.logger.error("ON CONFIG UPDATING: %s", e)
-                return "Sorry! There is a problem with your settings variable."
+                return "Sorry! There is a problem with setting. Please, try again later!"
 
         else:
             return "Sorry! There is no such settings variable."
 
     @staticmethod
-    async def link_user_to_group(user_id: int, group_id: int, payment_at: datetime=None) -> str:
+    async def link_user_to_group(user_id: int, group_id: int, payment_at: datetime=None) -> bool:
         """Links user to specified group and sets payment date.
 
         It creates a new row in a payments table with
@@ -82,11 +90,10 @@ class Admin:
             payment_at: a date when the use has to pay his bill.
 
         Returns:
-            Done!
+            Did insertion passed successfully (T/F).
         """
 
-        await db.add_payments(user_id, group_id, payment_at)
-        return "Done!"
+        return await db.add_payments(user_id, group_id, payment_at)
 
     async def get_unpaid_group(self) -> str:
         """Get all unpaid groups.
@@ -108,7 +115,7 @@ class Admin:
         groups = (
             pd.DataFrame(
                 unpaid_users,
-                columns=["group_name", "user_name", "payment_at", "paid"]
+                columns=["group_name", "user_name", "payment_at", "paid", "diff"]
             )
             .groupby("group_name")
         )
@@ -118,10 +125,12 @@ class Admin:
         for group in groups:
             num_of_groups -= 1
             group_name, users = group
-            ans += f"{group_name}:\n"
+            ans += f"<b>{str(group_name).upper()}:</b>\n"
             for row in users.to_numpy():
-                ans += f"- PAID: {row[2]} => ( USERNAME: {row[0]}, PAYMENT AT: {row[1]} )\n"
-                ans += '\n'
+                if row[3]:
+                    ans += f"- <i>PAID:</i> => ( USERNAME: @{row[1]},\n\tPAYMENT AT: {row[2]} )\n"
+                else:
+                    ans += f"- <i>UNPAID:</i> => ( USERNAME: @{row[1]},\n\tPAYMENT AT: {row[2]} )\n"
             if num_of_groups != 0:
                 ans += '\n=======================\n'
 
@@ -136,10 +145,11 @@ class Admin:
         Returns:
             (User ID, username) if retrieved successfully, None otherwise.
         """
+
         try:
             user = await db.get_user_by_name(username)
             return user
-        except Exception as e:
+        except AttributeError as e:
             self.logger.logger.error("ON GET USER: %s", e)
 
     async def get_group(self, group_name: str) -> Tuple[int, str, datetime, datetime]:
@@ -156,7 +166,7 @@ class Admin:
         try:
             group = await db.get_group_by_name(group_name)
             return group
-        except Exception as e:
+        except AttributeError as e:
             self.logger.logger.error("ON GET GROUP: %s", e)
 
 

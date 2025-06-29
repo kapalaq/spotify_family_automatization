@@ -1,10 +1,23 @@
+"""admin.py router
+
+This module is used to implement router for admin commands.
+It includes all commands except the general for both
+admin and user commands.
+
+Attributes:
+    admin_router (Router): a Router object to control flow.
+    admin (Admin): a supporting class with Admin specific functions.
+    storage (MemoryStorage): a memory storage for forms.
+    logger (ErrorLogger): a logger object to control logging.
+"""
+
+from datetime import datetime
 from aiogram import Router, types
 from aiogram.enums import ChatType
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from datetime import datetime
 
 from app.tools import LinkForm, SettingsForm, YAMLConfig
 from app.tools import ErrorLogger
@@ -16,6 +29,37 @@ admin = Admin()
 storage = MemoryStorage()
 
 logger = ErrorLogger()
+
+
+@admin_router.message(Command("start"))
+async def start(message: types.Message):
+    """Start command handler.
+
+    This function handles first launch and
+    /start command. It provides user with
+    introduction and basic functionality.
+
+    Args:
+        message (types.Message): the message to be processed.
+
+    Returns:
+        None, welcome message.
+    """
+
+    ans = """
+<b>He-e-y! 🤖 Spotify Bot here.</b>
+I help people connect to <b>Spotify Family Subscription</b> 🎵.
+My goal is to help you handle all these users 👥.
+Feel free to contact the main developer if you have any questions: @kapalaq 💬
+
+To make everything clear, I provide you with list of all commands 📋.
+If you want get detailed info about them, write <b>/help</b> ℹ️
+- <b>/unpaid</b> : shows you all unpaid users 💸.
+- <b>/update</b> : allows you to update some variables 🔄.
+- <b>/link</b> : a manual user to group linking process 🔗.
+"""
+    await message.answer(ans, parse_mode="HTML")
+
 
 
 @admin_router.message(Command("unpaid"))
@@ -39,8 +83,10 @@ async def get_unpaid(message: types.Message):
         return  # Only process DMs from admin
 
     response = await admin.get_unpaid_group()
+    print("Response:", response)
 
-    await message.answer(response)
+    await message.answer(response, parse_mode="HTML")
+
 
 
 @admin_router.message(Command("update"))
@@ -122,10 +168,16 @@ async def process_value(message: types.Message, state: FSMContext) -> None:
         None, will send message according to the next dialogue step.
     """
 
-    value = int(message.text.strip())
-    if value <= 0:
+    try:
+        value = int(message.text.strip())
+    except ValueError:
+        await message.answer("Your value is invalid. Please, enter valid value.")
+        await state.set_state(SettingsForm.value)
+        return
+
+    if int(message.text.strip()) <= 0:
         await message.answer("Your value is less or equal to 0. Please, enter valid value.")
-        await state.set_state(SettingsForm.target)
+        await state.set_state(SettingsForm.value)
         return
 
     await state.update_data(value=value)
@@ -175,6 +227,8 @@ async def confirm_settings_form(message: types.Message, state: FSMContext) -> No
 
             msg = await admin.update_settings(data['target'], data['value'])
             await message.answer(msg)
+
+            await state.clear()
 
         else:
             logger.logger.error(f"There is no such Settings state: {previous_state}",
@@ -382,10 +436,15 @@ async def confirm_link_form(message: types.Message, state: FSMContext) -> None:
         elif previous_state == LinkForm.payment_at:
             await message.answer("Thank you for your information!",
                                  reply_markup=ReplyKeyboardRemove())
+            ans = await admin.link_user_to_group(
+                data['user_id'], data['group_id'], data['payment_at']
+            )
 
-            ans = await admin.link_user_to_group(data['user_id'], data['group_id'], data['payment_at'])
+            if ans:
+                await message.answer("Done!")
+            else:
+                await message.answer("Sorry! Such relation already exists.")
 
-            await message.answer(ans)
             await state.clear()
 
         else:
@@ -404,6 +463,7 @@ async def confirm_link_form(message: types.Message, state: FSMContext) -> None:
 
         else:
             logger.logger.error(f"There is no such LinkForm state: {previous_state}")
+            await state.clear()
 
         await message.answer("Please, reenter your data.",
                              reply_markup=ReplyKeyboardRemove())

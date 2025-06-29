@@ -2,6 +2,8 @@ import aiopg
 import asyncio
 import sys
 from datetime import datetime
+
+import psycopg2
 from dateutil.relativedelta import relativedelta
 from typing import List, Tuple
 
@@ -22,6 +24,7 @@ class Database:
         self.dsn = (f"dbname={cfg.database} user={cfg.username.get_secret_value()} "
                     f"password={cfg.password.get_secret_value()} "
                     f"host={cfg.host} port={cfg.port}")
+        self.pool = None
 
     def __del__(self):
         self.close()
@@ -33,6 +36,10 @@ class Database:
         """
         try:
             self.pool = await aiopg.create_pool(self.dsn)
+        except psycopg2.OperationalError as e:
+            logger.logger.error(f"Database connection failed: %s", e)
+        except asyncio.TimeoutError:
+            logger.logger.error("Connection attempt timed out.")
         except Exception as e:
             logger.logger.error("ON CONNECTION: %s", e)
 
@@ -59,7 +66,7 @@ class Database:
             Exception: Database connection failed.
         """
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -112,8 +119,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -135,7 +143,7 @@ class Database:
             Exception: Database connection failed.
         """
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -156,8 +164,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -179,8 +188,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -204,8 +214,9 @@ class Database:
             Exception: Database connection failed.
             Exception: Group already exists.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
         try:
             if payment_at < datetime.now():
                 delta = relativedelta(payment_at, datetime.now())
@@ -237,8 +248,9 @@ class Database:
         Errors:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -258,14 +270,18 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "SELECT group_id, group_name, payment_at, created_at FROM groups WHERE group_id = %s",
+                        """
+                        SELECT group_id, group_name, payment_at, created_at
+                        FROM groups WHERE group_id = %s
+                        """,
                         (group_id,)
                     )
                     return await cursor.fetchone()
@@ -280,8 +296,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -317,7 +334,10 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "UPDATE groups SET group_name = LOWER(%s) WHERE group_id = %s",
+                        """
+                        UPDATE groups SET group_name = LOWER(%s)
+                        WHERE group_id = %s
+                        """,
                         (new_group_name, group_id)
                     )
                 except Exception as e:
@@ -334,8 +354,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
         try:
             if payment_at < datetime.now():
                 delta = relativedelta(payment_at, datetime.now())
@@ -367,8 +388,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -389,8 +411,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -410,8 +433,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -435,8 +459,9 @@ class Database:
         :param month_paid: how many month in advance he paid
         :return: whether the user was added successfully (T/F)
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -466,6 +491,7 @@ class Database:
             Exception: Database connection failed.
         """
         if not self.pool:
+
             raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
@@ -473,12 +499,13 @@ class Database:
                 try:
                     await cursor.execute(
                         """
-                        SELECT group_name, user_name, payment_at, paid, diff FROM (
+                        SELECT group_name, username, payment_at, paid, diff
+                        FROM (
                             SELECT 
                             g.group_name as group_name,
                             sub.username as username,
                             sub.payment_at as payment_at,
-                            sub.diff < 0 as paid
+                            sub.diff < 0 as paid,
                             sub.diff as diff,
                             MAX(sub.diff) OVER (PARTITION BY sub.group_id) as max_diff_value
                             FROM groups g INNER JOIN
@@ -504,8 +531,9 @@ class Database:
         :param username: username of the user
         :return: whether the user was deleted successfully (T/F)
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -524,8 +552,9 @@ class Database:
         :param group_name: name of the group
         :return: whether the group was deleted successfully (T/F)
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -545,8 +574,9 @@ class Database:
         :throw:
             Exception: Database connection failed.
         """
+
         if not self.pool:
-            raise Exception("Database connection pool is empty")
+            raise AttributeError("Database connection pool is empty")
 
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cursor:
