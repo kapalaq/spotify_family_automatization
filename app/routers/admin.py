@@ -19,8 +19,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
-from app.tools import LinkForm, SettingsForm, YAMLConfig
-from app.tools import ErrorLogger
+from app.tools import LinkForm, SettingsForm, DeleteForm
+from app.tools import ErrorLogger, YAMLConfig
 from .users.admin import Admin
 
 
@@ -89,6 +89,201 @@ async def get_unpaid(message: types.Message):
 
 
 
+@admin_router.message(Command("delete"))
+async def delete_cmd(message: types.Message,  state: FSMContext) -> None:
+    """Process /delete command from admin
+
+    It will start dialogue that helps admin
+    delete user or group.
+
+    Args:
+        message: a message from the admin.
+        state: state object for dialogue.
+
+    Returns:
+        None, will send message according to the next dialogue step.
+    """
+
+    if (message.chat.type != ChatType.PRIVATE or
+        not admin.is_admin(message.from_user.id)):
+        return  # Only process DMs from admin
+
+    await message.answer("Hey! What do you want to delete?",
+                         reply_markup=ReplyKeyboardMarkup(
+                             keyboard=[
+                                 [
+                                     KeyboardButton(text="user"),
+                                     KeyboardButton(text="group"),
+                                 ]
+                             ],
+                             resize_keyboard=True,
+                         ))
+    await state.set_state(SettingsForm.target)
+
+@admin_router.message(DeleteForm.target)
+async def process_delete_target(message: types.Message, state: FSMContext) -> None:
+    """Process type value from admin.
+
+    This function make sure admin will enter
+    type correctly with logic specific validation.
+
+    Args:
+        message: a message from the admin.
+        state: state object for dialogue.
+
+    Returns:
+        None, will send message according to the next dialogue step.
+    """
+
+    target = message.text.strip().lower()
+
+    if target == 'user':
+        await message.answer(
+            f"""
+            Please, provide me with username of the person you want to delete.
+            Note: Telegram requires usernames to be from 5 to 32 letters long.
+            it also have to consist only of letters, numbers and underscores.
+            Please include '@' character.
+            """,
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+    elif target == 'group':
+        await message.answer(
+            f"""
+                Please, provide me with name of the group you want to delete.
+                Note: Telegram requires usernames to be from 5 to 32 letters long.
+                it also have to consist only of letters, numbers and underscores.
+                Please include '@' character.
+                """,
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+    else:
+        await message.answer(f"There are no settings named {target}. Please try again.")
+        await state.set_state(SettingsForm.target)
+        return
+
+    await state.update_data(target=target)
+    await state.set_state(SettingsForm.value)
+
+@admin_router.message(DeleteForm.value)
+async def process_delete_value(message: types.Message, state: FSMContext) -> None:
+    """Process name on delete from admin.
+
+    This function make sure admin will enter
+    name on delete correctly with Telegram specific validation.
+
+    Args:
+        message: a message from the admin.
+        state: state object for dialogue.
+
+    Returns:
+        None, will send message according to the next dialogue step.
+    """
+
+    value = message.text.strip()
+    data = await state.get_data()
+
+    if data['target'] == 'user':
+
+        user = await admin.get_user(value)
+        if (len(message.text) < 6 or len(message.text) > 33
+                or not message.text.startswith('@')
+                or not message.text.replace('_', '')[1:].isalnum()
+                or user is None):
+            await message.reply("This username is incorrect. Please try again.")
+            await state.set_state(DeleteForm.value)
+            return
+
+        await state.update_data(value=user[0])
+
+    elif data['target'] == 'group':
+
+        group = await admin.get_group(value)
+        if len(message.text) > 255 or group is None:
+            await message.reply("This group name is incorrect. Please try again.")
+            await state.set_state(DeleteForm.value)
+            return
+
+        await state.update_data(value=group[0])
+
+    else:
+        logger.logger.error(
+            f"ON DELETION PROCEESS: UNKNOWN VALUE FOR TARGET ATTRIBUTE: {data['target']}"
+        )
+        await state.clear()
+        return
+
+    await message.answer(
+        f"You entered {value}, is this correct?\n"
+        f"Note: Delete operation cannot be reverted and "
+        f"requires pass all addition process from the start "
+        f"if you will ever change your mind.\n"
+        f"<b>ALL</b> connected payments to specified "
+        f"<i>username/group name</i> will be also deleted.\n"
+        f"Write 'exit' to exit update process.",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [
+                    KeyboardButton(text="Yes"),
+                    KeyboardButton(text="No"),
+                ]
+            ],
+            resize_keyboard=True,
+        )
+    )
+    await state.set_state(SettingsForm.confirm)
+
+@admin_router.message(DeleteForm.confirm)
+async def confirm_delete_form(message: types.Message, state: FSMContext) -> None:
+    """Confirm values for settings form.
+
+    This function make sure admin is final
+    about values he entered. If he is not
+    then he will be sent back in terms of
+    dialogue flow.
+
+    Args:
+        message: a message from the admin.
+        state: a state object for dialogue.
+
+    Returns:
+        None, will send message according to the next dialogue step
+        and redirect there.
+    """
+
+    response = message.text.lower().strip()
+    data = await state.get_data()
+
+    if response == "yes":
+        await message.answer("Thank you for your information!",
+                             reply_markup=ReplyKeyboardRemove())
+
+        if data['target'] == 'user':
+            response = await admin.delete_user(data['value'])
+
+        elif data['target'] == 'group':
+            response = await admin.delete_group(data['value'])
+
+        sorry = "Sorry!, there is a problem with our server. Please try again later."
+        msg = "Done!" if response else sorry
+        await message.answer(msg)
+
+        await state.clear()
+
+    elif response == "no":
+        await message.answer("You can reenter your data.",
+                             reply_markup=ReplyKeyboardRemove())
+        await state.set_state(SettingsForm.value)
+
+    else:
+        await message.answer("Your deletion process has been stopped.",
+                             reply_markup=ReplyKeyboardRemove())
+        await state.clear()
+
+
+
 @admin_router.message(Command("update"))
 async def update_settings(message: types.Message,  state: FSMContext) -> None:
     """Process /update command from admin
@@ -120,7 +315,7 @@ async def update_settings(message: types.Message,  state: FSMContext) -> None:
     await state.set_state(SettingsForm.target)
 
 @admin_router.message(SettingsForm.target)
-async def process_target(message: types.Message, state: FSMContext) -> None:
+async def process_update_target(message: types.Message, state: FSMContext) -> None:
     """Process target value from admin.
 
     This function make sure admin will enter
@@ -154,7 +349,7 @@ async def process_target(message: types.Message, state: FSMContext) -> None:
     await state.set_state(SettingsForm.value)
 
 @admin_router.message(SettingsForm.value)
-async def process_value(message: types.Message, state: FSMContext) -> None:
+async def process_update_value(message: types.Message, state: FSMContext) -> None:
     """Process update value from admin.
 
     This function make sure admin will enter
@@ -181,7 +376,6 @@ async def process_value(message: types.Message, state: FSMContext) -> None:
         return
 
     await state.update_data(value=value)
-    await state.update_data(previous_state=SettingsForm.value)
 
     await message.answer(
         f"You entered {message.text}, is this correct?"
@@ -218,30 +412,18 @@ async def confirm_settings_form(message: types.Message, state: FSMContext) -> No
 
     response = message.text.lower().strip()
     data = await state.get_data()
-    previous_state = data['previous_state']
 
     if response == "yes":
-        if previous_state == SettingsForm.value:
-            await message.answer("Thank you for your information!",
-                                 reply_markup=ReplyKeyboardRemove())
+        await message.answer("Thank you for your information!",
+                             reply_markup=ReplyKeyboardRemove())
 
-            msg = await admin.update_settings(data['target'], data['value'])
-            await message.answer(msg)
+        msg = await admin.update_settings(data['target'], data['value'])
+        await message.answer(msg)
 
-            await state.clear()
-
-        else:
-            logger.logger.error(f"There is no such Settings state: {previous_state}",
-                                reply_markup=ReplyKeyboardRemove())
-            await state.clear()
+        await state.clear()
 
     elif response == "no":
-        if previous_state == SettingsForm.value:
-            await state.set_state(SettingsForm.value)
-
-        else:
-            logger.logger.error(f"There is no such Settings state: {previous_state}")
-
+        await state.set_state(SettingsForm.value)
         await message.answer("You can reenter your data.",
                              reply_markup=ReplyKeyboardRemove())
 

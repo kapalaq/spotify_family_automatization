@@ -12,3 +12,9 @@ class LinkForm(StatesGroup):
     group_name = State()
     payment_at = State()
     confirm = State()
+
+
+class DeleteForm(StatesGroup):
+    target = State()
+    value = State()
+    confirm = State()

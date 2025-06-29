@@ -526,10 +526,13 @@ class Database:
                     logger.logger.error("ON GROUP STATISTIC GET: %s", e)
 
     async def delete_user(self, username: str) -> bool:
-        """
-        Delete user from database table
-        :param username: username of the user
-        :return: whether the user was deleted successfully (T/F)
+        """Delete user from database table by username.
+
+        Args:
+            username (str): an username of the user.
+
+        Returns:
+            whether the user was deleted successfully (T/F).
         """
 
         if not self.pool:
@@ -547,10 +550,12 @@ class Database:
                 return cursor.rowcount > 0
 
     async def delete_group(self, group_name: str) -> bool:
-        """
-        Delete group from database table
-        :param group_name: name of the group
-        :return: whether the group was deleted successfully (T/F)
+        """Delete group from database table by group name.
+
+        Args:
+            group_name: name of the group.
+        Returns:
+            whether the group was deleted successfully (T/F).
         """
 
         if not self.pool:

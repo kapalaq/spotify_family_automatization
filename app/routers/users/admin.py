@@ -136,6 +136,38 @@ class Admin:
 
         return ans
 
+    async def delete_user(self, username: str) -> bool:
+        """Delete user instance by username.
+
+        Args:
+            username: Telegram username of the user.
+
+        Returns:
+            Whether user is deleted successfully (T/F).
+        """
+
+        try:
+            response = await db.delete_user(username)
+            return response
+        except AttributeError as e:
+            self.logger.logger.error("ON USER DELETE: %s", e)
+
+    async def delete_group(self, group_name: str) -> bool:
+        """Delete group instance by group name.
+
+        Args:
+            group_name: Telegram name of the group.
+
+        Returns:
+            Whether group is deleted successfully (T/F).
+        """
+
+        try:
+            response = await db.delete_group(group_name)
+            return response
+        except AttributeError as e:
+            self.logger.logger.error("ON GROUP DELETE: %s", e)
+
     async def get_user(self, username: str) -> Tuple[int, str]:
         """Get user ID by username.
 
