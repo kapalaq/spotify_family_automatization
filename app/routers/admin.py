@@ -30,7 +30,6 @@ storage = MemoryStorage()
 
 logger = ErrorLogger()
 
-
 @admin_router.message(Command("start"))
 async def start(message: types.Message):
     """Start command handler.
@@ -46,18 +45,42 @@ async def start(message: types.Message):
         None, welcome message.
     """
 
-    ans = """
+    if not admin.is_admin(message.from_user.id):
+        return # process commands only from admin
+
+    if message.chat.type == ChatType.GROUP:
+        ans = """
 <b>He-e-y! 🤖 Spotify Bot here.</b>
-I help people connect to <b>Spotify Family Subscription</b> 🎵.
+I help people connect to <b>Spotify Family Subscription</b>🎵.
+
+To make everything clear, I provide you with list of all commands 📋.
+If you want get detailed info about them, write <b>/help</b> ℹ️
+
+<b>Users:</b>
+- <i>/add_me</i> : adds you in database 🔄.
+
+<b>Admin:</b>
+- <i>/add_me [date]</i> : adds group in database 🔄.
+"""
+
+    elif message.chat.type == ChatType.PRIVATE:
+        ans = """
+<b>He-e-y! 🤖 Spotify Bot here.</b>
+I help people connect to <b>Spotify Family Subscription</b>🎵.
 My goal is to help you handle all these users 👥.
 Feel free to contact the main developer if you have any questions: @kapalaq 💬
 
 To make everything clear, I provide you with list of all commands 📋.
-If you want get detailed info about them, write <b>/help</b> ℹ️
+
 - <b>/unpaid</b> : shows you all unpaid users 💸.
+- <b>/delete</b> : allows you to delete user/group
 - <b>/update</b> : allows you to update some variables 🔄.
 - <b>/link</b> : a manual user to group linking process 🔗.
 """
+
+    else:
+        ans = "This chat is <b>not supported</b> in current version."
+
     await message.answer(ans, parse_mode="HTML")
 
 
@@ -69,7 +92,7 @@ async def get_unpaid(message: types.Message):
     This function returns all groups that
     contains at least one unpaid user.
     In accordance with inner logic of Database,
-    an user is classified as unpaid if his payment
+    a user is classified as unpaid if his payment
     deadline is behind current time.
 
     Args:
@@ -83,9 +106,41 @@ async def get_unpaid(message: types.Message):
         return  # Only process DMs from admin
 
     response = await admin.get_unpaid_group()
-    print("Response:", response)
+
+    if response is None or response == '':
+        response = "There are no unpaid groups."
 
     await message.answer(response, parse_mode="HTML")
+
+
+
+@admin_router.message(Command('add_me'))
+async def add_me_cmd(message: types.Message) -> None:
+    """Add group command.
+
+    This function process /add_me command that, in admin case,
+    saves group into database.
+
+    Args:
+        message: a message from the admin.
+
+    Returns:
+        None, will send message of status.
+    """
+
+    if (message.chat.type != ChatType.GROUP or
+        not admin.is_admin(message.from_user.id)):
+        return # process only messages in groups from admin
+    try:
+        date = message.text.strip().lower().split()[1]
+    except IndexError:
+        date = datetime.now().strftime('%Y-%m-%d')
+        await message.answer(
+            f"Since you did not specify a date, {date} will be used."
+        )
+
+    await admin.add_group(message.chat.id, message.chat.title, date)
+    await message.reply("Done!", parse_mode="HTML")
 
 
 
@@ -118,7 +173,7 @@ async def delete_cmd(message: types.Message,  state: FSMContext) -> None:
                              ],
                              resize_keyboard=True,
                          ))
-    await state.set_state(SettingsForm.target)
+    await state.set_state(DeleteForm.target)
 
 @admin_router.message(DeleteForm.target)
 async def process_delete_target(message: types.Message, state: FSMContext) -> None:
@@ -139,33 +194,29 @@ async def process_delete_target(message: types.Message, state: FSMContext) -> No
 
     if target == 'user':
         await message.answer(
-            f"""
-            Please, provide me with username of the person you want to delete.
-            Note: Telegram requires usernames to be from 5 to 32 letters long.
-            it also have to consist only of letters, numbers and underscores.
-            Please include '@' character.
-            """,
+            "Please, provide me with username of the person you want to delete.\n"
+            "Note: Telegram requires usernames to be from 5 to 32 letters long.\n"
+            "It also have to consist only of letters, numbers and underscores.\n"
+            "Please include '@' character.",
             reply_markup=ReplyKeyboardRemove()
         )
 
     elif target == 'group':
         await message.answer(
-            f"""
-                Please, provide me with name of the group you want to delete.
-                Note: Telegram requires usernames to be from 5 to 32 letters long.
-                it also have to consist only of letters, numbers and underscores.
-                Please include '@' character.
-                """,
+            "Please, provide me with name of the group you want to delete.\n"
+            "Note: Telegram requires group names to be up to 255 letters long.\n",
             reply_markup=ReplyKeyboardRemove()
         )
 
     else:
-        await message.answer(f"There are no settings named {target}. Please try again.")
+        await message.answer(
+            f"There are no settings named {target}. Please try again."
+        )
         await state.set_state(SettingsForm.target)
         return
 
     await state.update_data(target=target)
-    await state.set_state(SettingsForm.value)
+    await state.set_state(DeleteForm.value)
 
 @admin_router.message(DeleteForm.value)
 async def process_delete_value(message: types.Message, state: FSMContext) -> None:
@@ -196,8 +247,6 @@ async def process_delete_value(message: types.Message, state: FSMContext) -> Non
             await state.set_state(DeleteForm.value)
             return
 
-        await state.update_data(value=user[0])
-
     elif data['target'] == 'group':
 
         group = await admin.get_group(value)
@@ -205,8 +254,6 @@ async def process_delete_value(message: types.Message, state: FSMContext) -> Non
             await message.reply("This group name is incorrect. Please try again.")
             await state.set_state(DeleteForm.value)
             return
-
-        await state.update_data(value=group[0])
 
     else:
         logger.logger.error(
@@ -221,8 +268,9 @@ async def process_delete_value(message: types.Message, state: FSMContext) -> Non
         f"requires pass all addition process from the start "
         f"if you will ever change your mind.\n"
         f"<b>ALL</b> connected payments to specified "
-        f"<i>username/group name</i> will be also deleted.\n"
+        f"<i>username/group name</i> will be also deleted.\n\n"
         f"Write 'exit' to exit update process.",
+        parse_mode="HTML",
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[
                 [
@@ -231,9 +279,10 @@ async def process_delete_value(message: types.Message, state: FSMContext) -> Non
                 ]
             ],
             resize_keyboard=True,
-        )
+        ),
     )
-    await state.set_state(SettingsForm.confirm)
+    await state.update_data(value=value)
+    await state.set_state(DeleteForm.confirm)
 
 @admin_router.message(DeleteForm.confirm)
 async def confirm_delete_form(message: types.Message, state: FSMContext) -> None:
@@ -275,7 +324,7 @@ async def confirm_delete_form(message: types.Message, state: FSMContext) -> None
     elif response == "no":
         await message.answer("You can reenter your data.",
                              reply_markup=ReplyKeyboardRemove())
-        await state.set_state(SettingsForm.value)
+        await state.set_state(DeleteForm.value)
 
     else:
         await message.answer("Your deletion process has been stopped.",

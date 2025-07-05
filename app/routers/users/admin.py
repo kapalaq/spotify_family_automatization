@@ -40,11 +40,12 @@ class Admin:
         stored IDs of admins in config file protected by Pydantic.
 
         Args:
-            user_id: A user unique ID.
+            user_id (int): A user unique ID.
 
         Returns:
             Whether user is an admin (True) or not (False).
         """
+
         return str(user_id) in map(lambda x: x.get_secret_value(), self.admin_id)
 
     @staticmethod
@@ -55,8 +56,8 @@ class Admin:
         from the chat directly using /update command.
 
         Args:
-            target: a target settings variable.
-            value: a new value for settings variable.
+            target (str): a target settings variable.
+            value (int): a new value for settings variable.
 
         Returns:
             Done! if update was successful. Apologize otherwise.
@@ -85,14 +86,13 @@ class Admin:
         to the specified group.
 
         Args:
-            user_id: a user ID of the user.
-            group_id: a group ID of the specified group.
-            payment_at: a date when the use has to pay his bill.
+            user_id (int): a user ID of the user.
+            group_id (int): a group ID of the specified group.
+            payment_at (datetime): a date when the use has to pay his bill.
 
         Returns:
             Did insertion passed successfully (T/F).
         """
-
         return await db.add_payments(user_id, group_id, payment_at)
 
     async def get_unpaid_group(self) -> str:
@@ -106,6 +106,7 @@ class Admin:
             All unpaid users divided into groups
             and purely written as a string.
         """
+
         try:
             unpaid_users = await db.get_unpaid_group()
         except AttributeError as e:
@@ -125,12 +126,20 @@ class Admin:
         for group in groups:
             num_of_groups -= 1
             group_name, users = group
+
             ans += f"<b>{str(group_name).upper()}:</b>\n"
             for row in users.to_numpy():
+
+                ans += "+-------------------+\n"
                 if row[3]:
-                    ans += f"- <i>PAID:</i> => ( USERNAME: @{row[1]},\n\tPAYMENT AT: {row[2]} )\n"
+                    ans += f"| <i>PAID:</i>\n"
                 else:
-                    ans += f"- <i>UNPAID:</i> => ( USERNAME: @{row[1]},\n\tPAYMENT AT: {row[2]} )\n"
+                    ans += f"| <i>UNPAID:</i>\n"
+
+                ans += (f"|--- USERNAME: @{row[1]},\n"
+                        f"|--- PAYMENT AT: {row[2].strftime("%d %B %Y, %H:%M")}.\n")
+
+            ans += "+-------------------+\n"
             if num_of_groups != 0:
                 ans += '\n=======================\n'
 
@@ -140,7 +149,7 @@ class Admin:
         """Delete user instance by username.
 
         Args:
-            username: Telegram username of the user.
+            username (str): Telegram username of the user.
 
         Returns:
             Whether user is deleted successfully (T/F).
@@ -156,7 +165,7 @@ class Admin:
         """Delete group instance by group name.
 
         Args:
-            group_name: Telegram name of the group.
+            group_name (str): Telegram name of the group.
 
         Returns:
             Whether group is deleted successfully (T/F).
@@ -172,7 +181,7 @@ class Admin:
         """Get user ID by username.
 
         Args:
-            username: Telegram username of the user.
+            username (str): Telegram username of the user.
 
         Returns:
             (User ID, username) if retrieved successfully, None otherwise.
@@ -188,7 +197,7 @@ class Admin:
         """Get group ID by group name.
 
         Args:
-            group_name: Telegram name of the group.
+            group_name (str): Telegram name of the group.
 
         Returns:
             (Group ID, group name, payment at, created at)
@@ -200,6 +209,27 @@ class Admin:
             return group
         except AttributeError as e:
             self.logger.logger.error("ON GET GROUP: %s", e)
+
+    async def add_group(self, group_id: int, group_name: str, date: str) -> bool:
+        """Add group to database.
+
+        Args:
+            group_id (int): Telegram group ID.
+            group_name (str): Telegram group name.
+            date (str): Payment date of the group.
+
+        Returns:
+            Whether group is added successfully (T/F).
+        """
+
+        try:
+            date = datetime.strptime(date, '%Y-%m-%d')
+        except ValueError as e:
+            self.logger.logger.error("ON ADD GROUP: %s", e)
+            return False
+
+        response = await db.add_group(group_id, group_name, date)
+        return response
 
 
 if __name__ == '__main__':

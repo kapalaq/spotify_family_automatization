@@ -127,7 +127,7 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "INSERT INTO users (user_id, username) VALUES (%s, LOWER(%s));",
+                        "INSERT INTO users (user_id, username) VALUES (%s, %s);",
                         (user_id, username.replace('@', ''))
                     )
                 except Exception as e:
@@ -172,7 +172,7 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "SELECT user_id, username FROM users WHERE username = LOWER(%s)",
+                        "SELECT user_id, username FROM users WHERE username = %s",
                         (username.replace('@', ''),)
                     )
                     return await cursor.fetchone()
@@ -196,8 +196,8 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "UPDATE users SET username = LOWER(%s) WHERE user_id = %s",
-                        (new_username, user_id)
+                        "UPDATE users SET username = %s WHERE user_id = %s",
+                        (new_username.replace('@', ''), user_id)
                     )
                 except Exception as e:
                     logger.logger.error("ON USERNAME UPDATE BY ID: %s", e)
@@ -543,7 +543,7 @@ class Database:
                 try:
                     await cursor.execute(
                         "DELETE FROM users WHERE username = %s",
-                        (username,)
+                        (username.replace('@', ''),)
                     )
                 except Exception as e:
                     logger.logger.error("ON DELETE FROM USERS: %s", e)
@@ -565,7 +565,7 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(
-                        "DELETE FROM groups WHERE group_name = %s",
+                        "DELETE FROM groups WHERE group_name = LOWER(%s)",
                         (group_name,)
                     )
                 except Exception as e:
